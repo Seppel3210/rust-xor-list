@@ -8,6 +8,8 @@ description = "An xor doubly-linked list"
 documentation = "https://docs.rs/xor_list"
 repository = "https://github.com/Seppel3210/rust-xor-list"
 readme = "README.md"
+keywords = ["xor", "list", "linked", "linked-list"]
+categories = ["no-std", "embedded"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
