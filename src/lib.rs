@@ -5,7 +5,9 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use core::iter::FromIterator;
 use core::marker::PhantomData;
+use core::mem;
 use core::ptr::NonNull;
 
 #[derive(Debug)]
@@ -130,14 +132,37 @@ impl<E> LinkedList<E> {
     pub fn pop_back(&mut self) -> Option<E> {
         self.pop_back_node().map(Node::into_element)
     }
+
+    pub fn append(&mut self, other: &mut Self) {
+        match self.tail {
+            None => mem::swap(self, other),
+            Some(mut tail) => {
+                // `as_mut` is okay here becaute we have exclusive access to the
+                // entirety of both lists.
+                if let Some(mut other_head) = other.head.take() {
+                    unsafe {
+                        tail.as_mut().xor(Some(other_head));
+                        other_head.as_mut().xor(Some(tail));
+                    }
+
+                    self.tail = other.tail.take();
+                    self.len += mem::replace(&mut other.len, 0);
+                }
+            }
+        }
+    }
 }
 
-//impl<T: fmt::Debug> fmt::Debug for LinkedList<T> {
-// fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-//    let vec = vec![];
-//   for i in 0..self.len {
+impl<E> FromIterator<E> for LinkedList<E> {
+    fn from_iter<I: IntoIterator<Item = E>>(iter: I) -> Self {
+        let mut list = Self::new();
+        list.extend(iter);
+        list
+    }
+}
 
-//   }
-//   f.debug_list().entry(self).finish()
-// }
-//}
+impl<E> Extend<E> for LinkedList<E> {
+    fn extend<I: IntoIterator<Item = E>>(&mut self, iter: I) {
+        iter.into_iter().for_each(move |elem| self.push_back(elem));
+    }
+}
