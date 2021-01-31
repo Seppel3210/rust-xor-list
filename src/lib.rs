@@ -1,7 +1,7 @@
 //! This crate implements an xor doubly-linked list i.e. the `previous` and `next` pointers are
 //! xored together in the lists nodes.
 //! Otherwise this implementation is mostly analogous to `alloc::collections::LinkedList`
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 extern crate alloc;
 
 use alloc::boxed::Box;
@@ -9,6 +9,9 @@ use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::mem;
 use core::ptr::NonNull;
+
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug)]
 pub struct LinkedList<E> {
@@ -18,6 +21,7 @@ pub struct LinkedList<E> {
     phantom: PhantomData<Box<Node<E>>>,
 }
 
+#[derive(Debug)]
 struct Node<E> {
     prev_x_next: usize,
     element: E,
