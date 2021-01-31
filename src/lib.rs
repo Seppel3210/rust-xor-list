@@ -1,9 +1,12 @@
+//! This crate implements an xor doubly-linked list i.e. the `previous` and `next` pointers are
+//! xored together in the lists nodes.
+//! Otherwise this implementation is mostly analogous to `alloc::collections::LinkedList`
 #![no_std]
 extern crate alloc;
 
+use alloc::boxed::Box;
 use core::marker::PhantomData;
 use core::ptr::NonNull;
-use alloc::boxed::Box;
 
 #[derive(Debug)]
 pub struct LinkedList<E> {
