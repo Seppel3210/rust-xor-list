@@ -5,6 +5,7 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use core::fmt;
 use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::mem;
@@ -27,6 +28,21 @@ struct Node<E> {
     element: E,
 }
 
+pub struct Iter<'a, E: 'a> {
+    head: Option<NonNull<Node<E>>>,
+    prev_head: Option<NonNull<Node<E>>>,
+    tail: Option<NonNull<Node<E>>>,
+    prev_tail: Option<NonNull<Node<E>>>,
+    len: usize,
+    marker: PhantomData<&'a Node<E>>,
+}
+
+impl<E: fmt::Debug> fmt::Debug for Iter<'_, E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Iter").field(&self.len).finish()
+    }
+}
+
 impl<E> Node<E> {
     fn new(element: E) -> Self {
         Node {
@@ -41,7 +57,13 @@ impl<E> Node<E> {
         NonNull::new(other)
     }
 
-    fn xor(&mut self, other: Option<NonNull<Self>>) {
+    fn xor(&self, other: Option<NonNull<Self>>) -> Option<NonNull<Self>> {
+        let other = other.map(|nn| nn.as_ptr() as usize).unwrap_or(0);
+        let result = other ^ self.prev_x_next;
+        NonNull::new(result as *mut _)
+    }
+
+    fn xor_assign(&mut self, other: Option<NonNull<Self>>) {
         let other = other.map(|nn| nn.as_ptr() as usize).unwrap_or(0);
         self.prev_x_next ^= other;
     }
@@ -54,11 +76,11 @@ impl<E> Node<E> {
 impl<E> LinkedList<E> {
     fn push_front_node(&mut self, mut node: Box<Node<E>>) {
         unsafe {
-            node.xor(self.head);
+            node.xor_assign(self.head);
             let node = Some(Box::leak(node).into());
             match self.head {
                 None => self.tail = node,
-                Some(head) => (*head.as_ptr()).xor(node),
+                Some(head) => (*head.as_ptr()).xor_assign(node),
             }
             self.head = node;
             self.len += 1;
@@ -72,7 +94,7 @@ impl<E> LinkedList<E> {
 
             match self.head {
                 None => self.tail = None,
-                Some(head) => (*head.as_ptr()).xor(Some(node_ptr)),
+                Some(head) => (*head.as_ptr()).xor_assign(Some(node_ptr)),
             }
             self.len -= 1;
             node
@@ -81,11 +103,11 @@ impl<E> LinkedList<E> {
 
     fn push_back_node(&mut self, mut node: Box<Node<E>>) {
         unsafe {
-            node.xor(self.tail);
+            node.xor_assign(self.tail);
             let node = Some(Box::leak(node).into());
             match self.tail {
                 None => self.head = node,
-                Some(tail) => (*tail.as_ptr()).xor(node),
+                Some(tail) => (*tail.as_ptr()).xor_assign(node),
             }
             self.tail = node;
             self.len += 1;
@@ -99,7 +121,7 @@ impl<E> LinkedList<E> {
 
             match self.tail {
                 None => self.head = None,
-                Some(tail) => (*tail.as_ptr()).xor(Some(node_ptr)),
+                Some(tail) => (*tail.as_ptr()).xor_assign(Some(node_ptr)),
             }
             self.len -= 1;
             node
@@ -145,14 +167,24 @@ impl<E> LinkedList<E> {
                 // entirety of both lists.
                 if let Some(mut other_head) = other.head.take() {
                     unsafe {
-                        tail.as_mut().xor(Some(other_head));
-                        other_head.as_mut().xor(Some(tail));
+                        tail.as_mut().xor_assign(Some(other_head));
+                        other_head.as_mut().xor_assign(Some(tail));
                     }
 
                     self.tail = other.tail.take();
                     self.len += mem::replace(&mut other.len, 0);
                 }
             }
+        }
+    }
+    pub fn iter(&self) -> Iter<'_, E> {
+        Iter {
+            head: self.head,
+            prev_head: None,
+            tail: self.tail,
+            prev_tail: None,
+            len: self.len,
+            marker: PhantomData,
         }
     }
 }
@@ -168,5 +200,66 @@ impl<E> FromIterator<E> for LinkedList<E> {
 impl<E> Extend<E> for LinkedList<E> {
     fn extend<I: IntoIterator<Item = E>>(&mut self, iter: I) {
         iter.into_iter().for_each(move |elem| self.push_back(elem));
+    }
+}
+
+impl<E: PartialEq> PartialEq for LinkedList<E> {
+    fn eq(&self, other: &Self) -> bool {
+        self.len() == other.len() && self.iter().eq(other)
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.len() != other.len() || self.iter().ne(other)
+    }
+}
+
+impl<'a, E> Iterator for Iter<'a, E> {
+    type Item = &'a E;
+
+    fn next(&mut self) -> Option<&'a E> {
+        if self.len == 0 {
+            None
+        } else {
+            self.head.map(|node| unsafe {
+                let node = &*node.as_ptr();
+                self.len -= 1;
+                self.head = node.xor(self.prev_head);
+                self.prev_head = Some(node.into());
+                &node.element
+            })
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (self.len, Some(self.len))
+    }
+
+    fn last(mut self) -> Option<&'a E> {
+        self.next_back()
+    }
+}
+
+impl<'a, E> DoubleEndedIterator for Iter<'a, E> {
+    fn next_back(&mut self) -> Option<&'a E> {
+        if self.len == 0 {
+            None
+        } else {
+            self.tail.map(|node| unsafe {
+                let node = &*node.as_ptr();
+                self.len -= 1;
+                self.tail = node.xor(self.prev_tail);
+                self.prev_tail = Some(node.into());
+                &node.element
+            })
+        }
+    }
+}
+
+impl<'a, E> IntoIterator for &'a LinkedList<E> {
+    type Item = &'a E;
+    type IntoIter = Iter<'a, E>;
+
+    fn into_iter(self) -> Iter<'a, E> {
+        self.iter()
     }
 }

@@ -1,5 +1,10 @@
 use super::*;
 
+use std::thread;
+use std::vec::Vec;
+
+use rand::{thread_rng, RngCore};
+
 fn list_from<T: Clone>(v: &[T]) -> LinkedList<T> {
     v.iter().cloned().collect()
 }
