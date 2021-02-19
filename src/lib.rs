@@ -1,4 +1,3 @@
-//! This crate implements an xor doubly-linked list i.e. the `previous` and `next` pointers are
 //! xored together in the lists nodes.
 //! Otherwise this implementation is mostly analogous to `alloc::collections::LinkedList`
 #![cfg_attr(not(test), no_std)]
@@ -185,6 +184,19 @@ impl<E> LinkedList<E> {
             prev_tail: None,
             len: self.len,
             marker: PhantomData,
+        }
+    }
+}
+
+impl<E: Clone> Clone for LinkedList<E> {
+    fn clone(&self) -> Self {
+        self.iter().cloned().collect()
+    }
+
+    fn clone_from(&mut self, other: &Self) {
+        let mut iter_other = other.iter();
+        if self.len() > other.len() {
+            todo!();
         }
     }
 }

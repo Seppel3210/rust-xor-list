@@ -24,7 +24,15 @@ pub fn check_links<T>(list: &LinkedList<T>) {
             Some(node) => node_ptr = &*node.as_ptr(),
         }
         loop {
-            match node_ptr.other_ptr(last_ptr.map(NonNull::from)) {
+            match (last_ptr, node_ptr.prev) {
+                (None, None) => {}
+                (None, _) => panic!("prev link for head"),
+                (Some(p), Some(pptr)) => {
+                    assert_eq!(p as *const Node<T>, pptr.as_ptr() as *const Node<T>);
+                }
+                _ => panic!("prev link is none, not good"),
+            }
+            match node_ptr.next {
                 Some(next) => {
                     last_ptr = Some(node_ptr);
                     node_ptr = &*next.as_ptr();
@@ -145,7 +153,6 @@ fn test_clone_from() {
     }
 }
 
-/*
 #[test]
 #[cfg_attr(target_os = "emscripten", ignore)]
 fn test_send() {
@@ -421,4 +428,3 @@ fn test_cursor_mut_insert() {
     check_links(&m);
     assert_eq!(m.iter().cloned().collect::<Vec<_>>(), &[200, 201, 202, 203, 1, 100, 101]);
 }
-*/
