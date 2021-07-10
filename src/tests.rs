@@ -24,7 +24,7 @@ pub fn check_links<T>(list: &LinkedList<T>) {
             Some(node) => node_ptr = &*node.as_ptr(),
         }
         loop {
-            match node_ptr.other_ptr(last_ptr.map(NonNull::from)) {
+            match node_ptr.xor(last_ptr.map(NonNull::from)) {
                 Some(next) => {
                     last_ptr = Some(node_ptr);
                     node_ptr = &*next.as_ptr();

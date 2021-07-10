@@ -5,7 +5,9 @@
 extern crate alloc;
 
 use alloc::boxed::Box;
+use core::cmp::Ordering;
 use core::fmt;
+use core::hash::{Hash, Hasher};
 use core::iter::FromIterator;
 use core::marker::PhantomData;
 use core::mem;
@@ -14,7 +16,6 @@ use core::ptr::NonNull;
 #[cfg(test)]
 mod tests;
 
-#[derive(Debug)]
 pub struct LinkedList<E> {
     head: Option<NonNull<Node<E>>>,
     tail: Option<NonNull<Node<E>>>,
@@ -138,6 +139,12 @@ impl<E> LinkedList<E> {
     }
 }
 
+impl<E> Default for LinkedList<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<E> FromIterator<E> for LinkedList<E> {
     fn from_iter<I: IntoIterator<Item = E>>(iter: I) -> Self {
         let mut list = Self::new();
@@ -161,6 +168,48 @@ impl<E: PartialEq> PartialEq for LinkedList<E> {
         self.len() != other.len() || self.iter().ne(other)
     }
 }
+
+impl<E: Eq> Eq for LinkedList<E> {}
+
+impl<E: PartialOrd> PartialOrd for LinkedList<E> {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        self.iter().partial_cmp(other)
+    }
+}
+
+impl<E: Ord> Ord for LinkedList<E> {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.iter().cmp(other)
+    }
+}
+
+impl<E: Clone> Clone for LinkedList<E> {
+    fn clone(&self) -> Self {
+        self.iter().cloned().collect()
+    }
+    // TODO: fn clone_from
+}
+
+impl<E: fmt::Debug> fmt::Debug for LinkedList<E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_list().entries(self).finish()
+    }
+}
+
+impl<E: Hash> Hash for LinkedList<E> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.len().hash(state);
+        for elt in self {
+            elt.hash(state);
+        }
+    }
+}
+
+unsafe impl<E: Send> Send for LinkedList<E> {}
+unsafe impl<E: Sync> Sync for LinkedList<E> {}
+
+unsafe impl<E: Send> Send for Iter<'_, E> {}
+unsafe impl<E: Sync> Sync for Iter<'_, E> {}
 
 #[derive(Debug)]
 struct Node<E> {
@@ -192,7 +241,6 @@ impl<E> Node<E> {
     }
 }
 
-#[derive(Clone)]
 pub struct Iter<'a, E: 'a> {
     head: Option<NonNull<Node<E>>>,
     prev_head: Option<NonNull<Node<E>>>,
@@ -204,7 +252,30 @@ pub struct Iter<'a, E: 'a> {
 
 impl<E: fmt::Debug> fmt::Debug for Iter<'_, E> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Iter").field(&self.len).finish()
+        let head = self.head.clone();
+        let tail = self.tail.clone();
+        head.map(|nn| unsafe {
+            (&mut *nn.as_ptr()).xor_assign(self.prev_head);
+        });
+        tail.map(|nn| unsafe {
+            (&mut *nn.as_ptr()).xor_assign(self.prev_tail);
+        });
+
+        f.debug_tuple("Iter")
+            .field(&*mem::ManuallyDrop::new(LinkedList {
+                head,
+                tail,
+                len: self.len,
+                phantom: PhantomData,
+            }))
+            .field(&self.len)
+            .finish()
+    }
+}
+
+impl<T> Clone for Iter<'_, T> {
+    fn clone(&self) -> Self {
+        Iter { ..*self }
     }
 }
 
