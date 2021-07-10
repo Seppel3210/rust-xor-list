@@ -22,57 +22,6 @@ pub struct LinkedList<E> {
     phantom: PhantomData<Box<Node<E>>>,
 }
 
-#[derive(Debug)]
-struct Node<E> {
-    prev_x_next: usize,
-    element: E,
-}
-
-pub struct Iter<'a, E: 'a> {
-    head: Option<NonNull<Node<E>>>,
-    prev_head: Option<NonNull<Node<E>>>,
-    tail: Option<NonNull<Node<E>>>,
-    prev_tail: Option<NonNull<Node<E>>>,
-    len: usize,
-    marker: PhantomData<&'a Node<E>>,
-}
-
-impl<E: fmt::Debug> fmt::Debug for Iter<'_, E> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("Iter").field(&self.len).finish()
-    }
-}
-
-impl<E> Node<E> {
-    fn new(element: E) -> Self {
-        Node {
-            prev_x_next: 0,
-            element,
-        }
-    }
-
-    fn other_ptr(&self, first: Option<NonNull<Self>>) -> Option<NonNull<Self>> {
-        let first = first.map(|nn| nn.as_ptr() as usize).unwrap_or(0);
-        let other = (self.prev_x_next ^ first) as *mut Self;
-        NonNull::new(other)
-    }
-
-    fn xor(&self, other: Option<NonNull<Self>>) -> Option<NonNull<Self>> {
-        let other = other.map(|nn| nn.as_ptr() as usize).unwrap_or(0);
-        let result = other ^ self.prev_x_next;
-        NonNull::new(result as *mut _)
-    }
-
-    fn xor_assign(&mut self, other: Option<NonNull<Self>>) {
-        let other = other.map(|nn| nn.as_ptr() as usize).unwrap_or(0);
-        self.prev_x_next ^= other;
-    }
-
-    fn into_element(self: Box<Self>) -> E {
-        self.element
-    }
-}
-
 impl<E> LinkedList<E> {
     fn push_front_node(&mut self, mut node: Box<Node<E>>) {
         unsafe {
@@ -90,7 +39,7 @@ impl<E> LinkedList<E> {
     fn pop_front_node(&mut self) -> Option<Box<Node<E>>> {
         self.head.map(|node_ptr| unsafe {
             let node = Box::from_raw(node_ptr.as_ptr());
-            self.head = node.other_ptr(None);
+            self.head = node.xor(None);
 
             match self.head {
                 None => self.tail = None,
@@ -117,7 +66,7 @@ impl<E> LinkedList<E> {
     fn pop_back_node(&mut self) -> Option<Box<Node<E>>> {
         self.tail.map(|node_ptr| unsafe {
             let node = Box::from_raw(node_ptr.as_ptr());
-            self.tail = node.other_ptr(None);
+            self.tail = node.xor(None);
 
             match self.tail {
                 None => self.head = None,
@@ -210,6 +159,52 @@ impl<E: PartialEq> PartialEq for LinkedList<E> {
 
     fn ne(&self, other: &Self) -> bool {
         self.len() != other.len() || self.iter().ne(other)
+    }
+}
+
+#[derive(Debug)]
+struct Node<E> {
+    prev_x_next: usize,
+    element: E,
+}
+
+impl<E> Node<E> {
+    fn new(element: E) -> Self {
+        Node {
+            prev_x_next: 0,
+            element,
+        }
+    }
+
+    fn xor(&self, other: Option<NonNull<Self>>) -> Option<NonNull<Self>> {
+        let other = other.map(|nn| nn.as_ptr() as usize).unwrap_or(0);
+        let result = other ^ self.prev_x_next;
+        NonNull::new(result as *mut _)
+    }
+
+    fn xor_assign(&mut self, other: Option<NonNull<Self>>) {
+        let other = other.map(|nn| nn.as_ptr() as usize).unwrap_or(0);
+        self.prev_x_next ^= other;
+    }
+
+    fn into_element(self: Box<Self>) -> E {
+        self.element
+    }
+}
+
+#[derive(Clone)]
+pub struct Iter<'a, E: 'a> {
+    head: Option<NonNull<Node<E>>>,
+    prev_head: Option<NonNull<Node<E>>>,
+    tail: Option<NonNull<Node<E>>>,
+    prev_tail: Option<NonNull<Node<E>>>,
+    len: usize,
+    marker: PhantomData<&'a Node<E>>,
+}
+
+impl<E: fmt::Debug> fmt::Debug for Iter<'_, E> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("Iter").field(&self.len).finish()
     }
 }
 
