@@ -205,6 +205,26 @@ impl<E: Hash> Hash for LinkedList<E> {
     }
 }
 
+impl<E> Drop for LinkedList<E> {
+    fn drop(&mut self) {
+        struct DropGuard<'a, E>(&'a mut LinkedList<E>);
+
+        impl<'a, E> Drop for DropGuard<'a, E> {
+            fn drop(&mut self) {
+                // Continuo the same loop we do below. This only runs when a destructor
+                // has panicked. If another one panics this will abort.
+                while self.0.pop_front_node().is_some() {}
+            }
+        }
+
+        while let Some(node) = self.pop_front_node() {
+            let guard = DropGuard(self);
+            drop(node);
+            mem::forget(guard);
+        }
+    }
+}
+
 unsafe impl<E: Send> Send for LinkedList<E> {}
 unsafe impl<E: Sync> Sync for LinkedList<E> {}
 
